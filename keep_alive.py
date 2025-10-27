@@ -3,7 +3,7 @@ from threading import Thread
 
 app = Flask('')
 
-@app.route('/')
+@app.route('/health')
 def home():
     return "Bot Discord en ligne !"
 
