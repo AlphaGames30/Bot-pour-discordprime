@@ -5,7 +5,7 @@ aiosignal==1.4.0
 attrs==25.3.0
 blinker==1.9.0
 click==8.3.0
-discord.py==2.4.0
+discord.py==3.12.1
 Flask==3.1.2
 frozenlist==1.7.0
 idna==3.10
