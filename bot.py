@@ -156,57 +156,6 @@ async def healthboost_command(ctx):
     await ctx.reply(f'🏥 Health Boost {status}!{extra_msg}')
     print(f'🏥 Health Boost {status}')
 
-@bot.command(name='stats')
-async def stats_command(ctx):
-    user = get_user_data(ctx.author.id)
-    stats_msg = f'📊 **Tes statistiques Halloween** 📊\n\n'
-    stats_msg += f'💰 Points totaux: **{user["points"]}**\n'
-    stats_msg += f'🏥 Points de Health Boost: **{user["healthBoost"]}**\n\n'
-    stats_msg += f'🎃 **Réactions reçues:**\n'
-    
-    if user['reactions']:
-        for emoji_name, count in user['reactions'].items():
-            emoji_data = next((e for e in HALLOWEEN_EMOJIS if e['name'] == emoji_name), None)
-            emoji_icon = emoji_data['emoji'] if emoji_data else '❓'
-            stats_msg += f'{emoji_icon} {emoji_name}: {count}x\n'
-    else:
-        stats_msg += 'Aucune réaction pour le moment!\n'
-    
-    await ctx.reply(stats_msg)
-
-@bot.command(name='serverreactions')
-async def serverreactions_command(ctx):
-    if not user_data:
-        await ctx.reply('🎃 Aucune réaction enregistrée pour le moment!')
-        return
-    
-    total_reactions = {}
-    total_points = 0
-    total_users = len(user_data)
-    
-    for user_id, data in user_data.items():
-        total_points += data['points']
-        for emoji_name, count in data.get('reactions', {}).items():
-            if emoji_name not in total_reactions:
-                total_reactions[emoji_name] = 0
-            total_reactions[emoji_name] += count
-    
-    stats_msg = '🎃 **STATISTIQUES GLOBALES DU SERVEUR** 🎃\n\n'
-    stats_msg += f'👥 Joueurs actifs: **{total_users}**\n'
-    stats_msg += f'💰 Points totaux distribués: **{total_points}**\n\n'
-    stats_msg += f'📊 **Réactions totales par emoji:**\n'
-    
-    if total_reactions:
-        sorted_reactions = sorted(total_reactions.items(), key=lambda x: x[1], reverse=True)
-        for emoji_name, count in sorted_reactions:
-            emoji_data = next((e for e in HALLOWEEN_EMOJIS if e['name'] == emoji_name), None)
-            emoji_icon = emoji_data['emoji'] if emoji_data else '❓'
-            stats_msg += f'{emoji_icon} **{emoji_name}**: {count}x ({emoji_data["points"] if emoji_data else "?"} pts chacun)\n'
-    else:
-        stats_msg += 'Aucune réaction pour le moment!\n'
-    
-    await ctx.reply(stats_msg)
-
 @bot.command(name='claim')
 async def claim_command(ctx):
     user = get_user_data(ctx.author.id)
