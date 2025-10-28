@@ -293,10 +293,6 @@ Le bot réagit automatiquement tous les 15-30 messages avec un emoji Halloween!
 🐺 Loup: 17 points (9% de chance)
 🎃 Citrouille: 31 points (1% de chance)
 
-@bot.command(name='help')
-async def help_command(ctx):
-    help_msg = """🎃 **BOT HALLOWEEN - AIDE** 🎃
-
 **Fonctionnement:**
 Le bot réagit automatiquement tous les 15-30 messages avec un emoji Halloween!
 
