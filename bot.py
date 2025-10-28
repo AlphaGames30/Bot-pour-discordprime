@@ -118,6 +118,20 @@ async def on_message(message):
         print(f'⏳ Prochaine réaction dans {next_reaction_at} messages')
     
     await bot.process_commands(message)
+    
+@bot.command(name='pointadd')
+@commands.has_permissions(administrator=True)
+async def pointadd_command(ctx, member: discord.Member, points: int):
+    if points < 0:
+        await ctx.reply('❌ Le nombre de points doit être positif!')
+        return
+    
+    user = get_user_data(member.id)
+    user['points'] += points
+    save_data()
+    
+    await ctx.reply(f'✅ **{points} points** ajoutés à {member.mention}! Nouveau total: **{user["points"]} points**')
+    print(f'➕ Admin {ctx.author} a ajouté {points}pts à {member}')
 
 @bot.command(name='points')
 async def points_command(ctx):
