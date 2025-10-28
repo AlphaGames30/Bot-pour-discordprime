@@ -4,13 +4,20 @@ import json
 import random
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from keep_alive import keep_alive
+
+import discord
+from discord.ext import commands
+import json
+import random
+import os
+from pathlib import Path
+from keep_alive import keep_alive
 
 intents = discord.Intents.default()
 intents.guilds = True
 intents.guild_messages = True
 intents.message_content = True
-intents.members = True
 
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
@@ -42,34 +49,19 @@ def select_random_emoji():
     return HALLOWEEN_EMOJIS[-1]
 
 def load_data():
-    global user_data, health_boost_active
+    global user_data
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, dict) and '_system' in data:
-                health_boost_active = data['_system'].get('health_boost_active', False)
-                user_data = {k: v for k, v in data.items() if k != '_system'}
-            else:
-                user_data = data
-                health_boost_active = False
+            user_data = json.load(f)
         print('✅ Données chargées avec succès')
-        print(f'🏥 Health Boost: {"activé" if health_boost_active else "désactivé"}')
     except FileNotFoundError:
         user_data = {}
-        health_boost_active = False
         print('📝 Nouveau fichier de données créé')
 
 def save_data():
     try:
-        data_to_save = {
-            '_system': {
-                'health_boost_active': health_boost_active
-            }
-        }
-        data_to_save.update(user_data)
-        
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+            json.dump(user_data, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f'❌ Erreur lors de la sauvegarde: {e}')
 
@@ -79,21 +71,9 @@ def get_user_data(user_id):
         user_data[user_id_str] = {
             'points': 0,
             'healthBoost': 0,
-            'reactions': {},
-            'lastClaim': None
+            'reactions': {}
         }
-    if 'lastClaim' not in user_data[user_id_str]:
-        user_data[user_id_str]['lastClaim'] = None
     return user_data[user_id_str]
-
-def get_health_boost_status():
-    return health_boost_active
-
-def set_health_boost_status(status):
-    global health_boost_active
-    health_boost_active = status
-    save_data()
-    print(f'🏥 Health Boost {"activé" if status else "désactivé"} via interface web')
 
 @bot.event
 async def on_ready():
@@ -107,14 +87,6 @@ async def on_message(message):
     
     if message.author.bot:
         return
-    
-    try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, dict) and '_system' in data:
-                health_boost_active = data['_system'].get('health_boost_active', False)
-    except:
-        pass
     
     message_count += 1
     
@@ -183,113 +155,10 @@ async def leaderboard_command(ctx):
     
     await ctx.reply(leaderboard)
 
-@bot.command(name='serverreactions')
-async def serverreactions_command(ctx):
-    if not user_data:
-        await ctx.reply('🎃 Aucune réaction enregistrée pour le moment!')
-        return
-    
-    total_reactions = {}
-    total_points = 0
-    total_users = len(user_data)
-    
-    for user_id, data in user_data.items():
-        total_points += data['points']
-        for emoji_name, count in data.get('reactions', {}).items():
-            if emoji_name not in total_reactions:
-                total_reactions[emoji_name] = 0
-            total_reactions[emoji_name] += count
-    
-    stats_msg = '🎃 **STATISTIQUES GLOBALES DU SERVEUR** 🎃\n\n'
-    stats_msg += f'👥 Joueurs actifs: **{total_users}**\n'
-    stats_msg += f'💰 Points totaux distribués: **{total_points}**\n\n'
-    stats_msg += f'📊 **Réactions totales par emoji:**\n'
-    
-    if total_reactions:
-        sorted_reactions = sorted(total_reactions.items(), key=lambda x: x[1], reverse=True)
-        for emoji_name, count in sorted_reactions:
-            emoji_data = next((e for e in HALLOWEEN_EMOJIS if e['name'] == emoji_name), None)
-            emoji_icon = emoji_data['emoji'] if emoji_data else '❓'
-            stats_msg += f'{emoji_icon} **{emoji_name}**: {count}x ({emoji_data["points"] if emoji_data else "?"} pts chacun)\n'
-    else:
-        stats_msg += 'Aucune réaction pour le moment!\n'
-    
-    await ctx.reply(stats_msg)
-
-@bot.command(name='claim')
-async def claim_command(ctx):
-    user = get_user_data(ctx.author.id)
-    now = datetime.now()
-    
-    if user['lastClaim']:
-        last_claim = datetime.fromisoformat(user['lastClaim'])
-        time_diff = now - last_claim
-        
-        if time_diff < timedelta(hours=24):
-            remaining = timedelta(hours=24) - time_diff
-            hours = remaining.seconds // 3600
-            minutes = (remaining.seconds % 3600) // 60
-            await ctx.reply(f'⏰ Tu as déjà réclamé tes points aujourd\'hui! Reviens dans **{hours}h {minutes}m**.')
-            return
-    
-    selected_emoji = select_random_emoji()
-    points_earned = selected_emoji['points']
-    
-    if health_boost_active:
-        points_earned = int(points_earned * 1.5)
-        user['healthBoost'] += points_earned - selected_emoji['points']
-    
-    user['points'] += points_earned
-    
-    if selected_emoji['name'] not in user['reactions']:
-        user['reactions'][selected_emoji['name']] = 0
-    user['reactions'][selected_emoji['name']] += 1
-    
-    user['lastClaim'] = now.isoformat()
-    
-    save_data()
-    
-    boost_msg = ' (Health Boost x1.5 actif!)' if health_boost_active else ''
-    await ctx.reply(
-        f"🎁 {selected_emoji['emoji']} Claim réussi! Tu as gagné **{points_earned} points** avec {selected_emoji['name']}!{boost_msg}\n"
-        f"Total: **{user['points']} points**\n"
-        f"Reviens dans 24h pour ton prochain claim!"
-    )
-    print(f"🎁 Claim de {ctx.author}: {selected_emoji['emoji']} ({points_earned}pts)")
-
-@bot.command(name='pointadd')
-@commands.has_permissions(administrator=True)
-async def pointadd_command(ctx, member: discord.Member, points: int):
-    if points < 0:
-        await ctx.reply('❌ Le nombre de points doit être positif!')
-        return
-    
-    user = get_user_data(member.id)
-    user['points'] += points
-    save_data()
-    
-    await ctx.reply(f'✅ **{points} points** ajoutés à {member.mention}! Nouveau total: **{user["points"]} points**')
-    print(f'➕ Admin {ctx.author} a ajouté {points}pts à {member}')
-
-@bot.command(name='pointremove')
-@commands.has_permissions(administrator=True)
-async def pointremove_command(ctx, member: discord.Member, points: int):
-    if points < 0:
-        await ctx.reply('❌ Le nombre de points doit être positif!')
-        return
-    
-    user = get_user_data(member.id)
-    user['points'] = max(0, user['points'] - points)
-    save_data()
-    
-    await ctx.reply(f'✅ **{points} points** retirés de {member.mention}! Nouveau total: **{user["points"]} points**')
-    print(f'➖ Admin {ctx.author} a retiré {points}pts à {member}')
-
 @bot.command(name='healthboost')
 async def healthboost_command(ctx):
     global health_boost_active
     health_boost_active = not health_boost_active
-    save_data()
     status = 'activé ✅' if health_boost_active else 'désactivé ❌'
     extra_msg = ' Les points sont multipliés par 1.5!' if health_boost_active else ''
     await ctx.reply(f'🏥 Health Boost {status}!{extra_msg}')
@@ -301,21 +170,6 @@ async def stats_command(ctx):
     stats_msg = f'📊 **Tes statistiques Halloween** 📊\n\n'
     stats_msg += f'💰 Points totaux: **{user["points"]}**\n'
     stats_msg += f'🏥 Points de Health Boost: **{user["healthBoost"]}**\n\n'
-    
-    if user['lastClaim']:
-        last_claim = datetime.fromisoformat(user['lastClaim'])
-        now = datetime.now()
-        time_diff = now - last_claim
-        if time_diff < timedelta(hours=24):
-            remaining = timedelta(hours=24) - time_diff
-            hours = remaining.seconds // 3600
-            minutes = (remaining.seconds % 3600) // 60
-            stats_msg += f'⏰ Prochain claim dans: **{hours}h {minutes}m**\n\n'
-        else:
-            stats_msg += f'✅ Claim disponible maintenant!\n\n'
-    else:
-        stats_msg += f'🎁 Claim disponible! Utilise `!claim`\n\n'
-    
     stats_msg += f'🎃 **Réactions reçues:**\n'
     
     if user['reactions']:
@@ -339,48 +193,44 @@ Le bot réagit automatiquement tous les 15-30 messages avec un emoji Halloween!
 👻 Fantôme: 4 points (40% de chance)
 🧟 Zombie: 7 points (35% de chance)
 💀 Crâne: 10 points (15% de chance)
-🔪 Couteau: 12 points (9% de chance)
-🐺 Loup: 17 points (1% de chance)
-🎃 Citrouille: 31 points (0.09% de chance)
+🔪 Couteau: 12 points (10% de chance)
+🐺 Loup: 17 points (9% de chance)
+🎃 Citrouille: 31 points (1% de chance)
 
 **Commandes:**
 `!points` ou `!leaderboard` - Affiche le classement
-`!serverreactions` - Statistiques globales du serveur
-`!claim` - Réclame des points quotidiens (24h cooldown)
 `!stats` - Affiche tes statistiques
 `!healthboost` - Active/désactive le multiplicateur x1.5
-`!help` - Affiche cette aide
-
-**Commandes Admin:**
-`!pointadd @user <points>` - Ajoute des points
-`!pointremove @user <points>` - Retire des points"""
+`!help` - Affiche cette aide"""
     
     await ctx.reply(help_msg)
 
-@pointadd_command.error
-@pointremove_command.error
-async def admin_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.reply('❌ Cette commande est réservée aux administrateurs!')
-    elif isinstance(error, commands.MemberNotFound):
-        await ctx.reply('❌ Membre introuvable!')
-    elif isinstance(error, commands.BadArgument):
-        await ctx.reply('❌ Utilisation: `!pointadd @user <points>` ou `!pointremove @user <points>`')
+token = os.getenv('DISCORD_TOKEN')
 
-def start_bot():
-    token = os.getenv('DISCORD_TOKEN')
-    
-    if not token:
-        print('❌ ERREUR: DISCORD_TOKEN non défini dans les variables d\'environnement!')
-        print('📝 Veuillez ajouter votre token Discord dans les Secrets')
-        exit(1)
-    
-    try:
-        bot.run(token)
-    except Exception as e:
-        print(f'❌ Erreur de connexion: {e}')
-        exit(1)
+if not token:
+    print('❌ ERREUR: DISCORD_TOKEN non défini dans les variables d\'environnement!')
+    print('📝 Veuillez ajouter votre token Discord dans les Secrets')
+    exit(1)
 
-if __name__ == '__main__':
-    start_bot()
+try:
+    keep_alive()
+    bot.run(token)
+except Exception as e:
+    print(f'❌ Erreur de connexion: {e}')
+    exit(1)
 
+    await ctx.reply(help_msg)
+
+token = os.getenv('DISCORD_TOKEN')
+
+if not token:
+    print('❌ ERREUR: DISCORD_TOKEN non défini dans les variables d\'environnement!')
+    print('📝 Veuillez ajouter votre token Discord dans les Secrets')
+    exit(1)
+
+try:
+    keep_alive()
+    bot.run(token)
+except Exception as e:
+    print(f'❌ Erreur de connexion: {e}')
+    exit(1)
