@@ -133,6 +133,96 @@ async def pointadd_command(ctx, member: discord.Member, points: int):
     await ctx.reply(f'✅ **{points} points** ajoutés à {member.mention}! Nouveau total: **{user["points"]} points**')
     print(f'➕ Admin {ctx.author} a ajouté {points}pts à {member}')
 
+@bot.command(name='pointremove')
+@commands.has_permissions(administrator=True)
+async def pointremove_command(ctx, member: discord.Member, points: int):
+    if points < 0:
+        await ctx.reply('❌ Le nombre de points doit être positif!')
+        return
+    
+    user = get_user_data(member.id)
+    user['points'] = max(0, user['points'] - points)
+    save_data()
+    
+    await ctx.reply(f'✅ **{points} points** retirés de {member.mention}! Nouveau total: **{user["points"]} points**')
+    print(f'➖ Admin {ctx.author} a retiré {points}pts à {member}')
+
+@bot.command(name='claim')
+async def claim_command(ctx):
+    user = get_user_data(ctx.author.id)
+    now = datetime.now()
+    
+    if user['lastClaim']:
+        last_claim = datetime.fromisoformat(user['lastClaim'])
+        time_diff = now - last_claim
+        
+        if time_diff < timedelta(hours=24):
+            remaining = timedelta(hours=24) - time_diff
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            await ctx.reply(f'⏰ Tu as déjà réclamé tes points aujourd\'hui! Reviens dans **{hours}h {minutes}m**.')
+            return
+    
+    selected_emoji = select_random_emoji()
+    points_earned = selected_emoji['points']
+    
+    if health_boost_active:
+        points_earned = int(points_earned * 1.5)
+        user['healthBoost'] += points_earned - selected_emoji['points']
+    
+    user['points'] += points_earned
+    
+    if selected_emoji['name'] not in user['reactions']:
+        user['reactions'][selected_emoji['name']] = 0
+    user['reactions'][selected_emoji['name']] += 1
+    
+    user['lastClaim'] = now.isoformat()
+    
+    save_data()
+    
+    boost_msg = ' (Health Boost x1.5 actif!)' if health_boost_active else ''
+    await ctx.reply(
+        f"🎁 {selected_emoji['emoji']} Claim réussi! Tu as gagné **{points_earned} points** avec {selected_emoji['name']}!{boost_msg}\n"
+        f"Total: **{user['points']} points**\n"
+        f"Reviens dans 24h pour ton prochain claim!"
+    )
+    print(f"🎁 Claim de {ctx.author}: {selected_emoji['emoji']} ({points_earned}pts)")
+
+@bot.command(name='serverreactions')
+async def serverreactions_command(ctx):
+    if not user_data:
+        await ctx.reply('🎃 Aucune réaction enregistrée pour le moment!')
+        return
+    
+    total_reactions = {}
+    total_points = 0
+    total_users = len(user_data)
+    
+    for user_id, data in user_data.items():
+        total_points += data['points']
+        for emoji_name, count in data.get('reactions', {}).items():
+            if emoji_name not in total_reactions:
+                total_reactions[emoji_name] = 0
+            total_reactions[emoji_name] += count
+    
+    stats_msg = '🎃 **STATISTIQUES GLOBALES DU SERVEUR** 🎃\n\n'
+    stats_msg += f'👥 Joueurs actifs: **{total_users}**\n'
+    stats_msg += f'💰 Points totaux distribués: **{total_points}**\n\n'
+    stats_msg += f'📊 **Réactions totales par emoji:**\n'
+    
+    if total_reactions:
+        sorted_reactions = sorted(total_reactions.items(), key=lambda x: x[1], reverse=True)
+        for emoji_name, count in sorted_reactions:
+            emoji_data = next((e for e in HALLOWEEN_EMOJIS if e['name'] == emoji_name), None)
+            emoji_icon = emoji_data['emoji'] if emoji_data else '❓'
+            stats_msg += f'{emoji_icon} **{emoji_name}**: {count}x ({emoji_data["points"] if emoji_data else "?"} pts chacun)\n'
+    else:
+        stats_msg += 'Aucune réaction pour le moment!\n'
+    
+    await ctx.reply(stats_msg)
+
+
+
 @bot.command(name='points')
 async def points_command(ctx):
     await leaderboard_command(ctx)
@@ -203,11 +293,32 @@ Le bot réagit automatiquement tous les 15-30 messages avec un emoji Halloween!
 🐺 Loup: 17 points (9% de chance)
 🎃 Citrouille: 31 points (1% de chance)
 
+@bot.command(name='help')
+async def help_command(ctx):
+    help_msg = """🎃 **BOT HALLOWEEN - AIDE** 🎃
+
+**Fonctionnement:**
+Le bot réagit automatiquement tous les 15-30 messages avec un emoji Halloween!
+
+**Emojis et Points:**
+👻 Fantôme: 4 points (40% de chance)
+🧟 Zombie: 7 points (35% de chance)
+💀 Crâne: 10 points (15% de chance)
+🔪 Couteau: 12 points (9% de chance)
+🐺 Loup: 17 points (1% de chance)
+🎃 Citrouille: 31 points (0.09% de chance)
+
 **Commandes:**
 `!points` ou `!leaderboard` - Affiche le classement
+`!serverreactions` - Statistiques globales du serveur
+`!claim` - Réclame des points quotidiens (24h cooldown)
 `!stats` - Affiche tes statistiques
 `!healthboost` - Active/désactive le multiplicateur x1.5
-`!help` - Affiche cette aide"""
+`!help` - Affiche cette aide
+
+**Commandes Admin:**
+`!pointadd @user <points>` - Ajoute des points
+`!pointremove @user <points>` - Retire des points"""
     
     await ctx.reply(help_msg)
 
