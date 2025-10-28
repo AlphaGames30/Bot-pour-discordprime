@@ -276,16 +276,6 @@ async def pointremove_command(ctx, member: discord.Member, points: int):
     await ctx.reply(f'✅ **{points} points** retirés de {member.mention}! Nouveau total: **{user["points"]} points**')
     print(f'➖ Admin {ctx.author} a retiré {points}pts à {member}')
 
-@bot.command(name='healthboost')
-async def healthboost_command(ctx):
-    global health_boost_active
-    health_boost_active = not health_boost_active
-    save_data()
-    status = 'activé ✅' if health_boost_active else 'désactivé ❌'
-    extra_msg = ' Les points sont multipliés par 1.5!' if health_boost_active else ''
-    await ctx.reply(f'🏥 Health Boost {status}!{extra_msg}')
-    print(f'🏥 Health Boost {status}')
-
 @bot.command(name='stats')
 async def stats_command(ctx):
     user = get_user_data(ctx.author.id)
